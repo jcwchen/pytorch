@@ -242,6 +242,16 @@ void handleBlock(Block* block, AutocastContext initial_state) {
     switch (node->kind()) {
       case prim::CallFunction:
         // TODO: limit it only to amp related node;
+        if (current_state() == initial_state) {
+          // if the current autocasting state is the same as the global state,
+          // then autocasting will be done correctly on subsequent method and
+          // function calls
+          if (current_state()) {
+            castTensorInputs(
+                node, aten::_autocast_to_full_precision, current_state());
+          }
+          break;
+        }
         TORCH_INTERNAL_ASSERT(
             !incompatible_amp.has_value() || incompatible_amp.value(),
             "Calls are not expected with AMP & JIT");
@@ -250,6 +260,16 @@ void handleBlock(Block* block, AutocastContext initial_state) {
 
       case prim::CallMethod:
         // TODO: limit it only to amp related node;
+        if (current_state() == initial_state) {
+          // if the current autocasting state is the same as the global state,
+          // then autocasting will be done correctly on subsequent method and
+          // function calls
+          if (current_state()) {
+            castTensorInputs(
+                node, aten::_autocast_to_full_precision, current_state());
+          }
+          break;
+        }
         if (auto class_type = node->input(0)->type()->cast<ClassType>()) {
           const auto& name = node->s(attr::name);
           const auto& function = class_type->getMethod(name);
@@ -446,9 +466,11 @@ bool autocastEnabled() {
 void Autocast(const std::shared_ptr<Graph>& graph) {
   GRAPH_DUMP("\nBefore Autocast: ", graph);
   if (autocastEnabled()) {
+    auto is_gpu_enabled = at::autocast::is_enabled();
+    auto is_cpu_enabled = at::autocast::is_cpu_enabled();
     AutocastContext init = {
-        at::autocast::is_enabled(),
-        at::autocast::is_cpu_enabled(),
+        is_gpu_enabled,
+        is_cpu_enabled,
         at::autocast::get_autocast_gpu_dtype(),
         at::autocast::get_autocast_cpu_dtype()};
     handleBlock(graph->block(), init);
